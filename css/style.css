@@ -137,6 +137,16 @@ p{margin:6px 0}
 .opt .e{font-size:2.4rem;display:block}
 .opt.ok{background:var(--greenSoft);border-color:var(--green)}
 .opt.no{background:var(--orangeSoft);border-color:var(--orange)}
+.opt.gone{opacity:.25;text-decoration:line-through;pointer-events:none}
+
+/* רמז מפריאות */
+.hintwrap{margin:14px 0 4px}
+.hintbtn{display:flex;align-items:center;gap:10px;margin:8px auto 0;background:#fff6e0;border:2px solid #e9a23b;border-radius:18px;padding:6px 14px 6px 10px;font-size:1.1rem;font-weight:800;color:#3a2a14;cursor:pointer}
+.hintbtn svg{width:46px;height:54px;flex:none}
+.hintbtn.small{margin:8px 0 0;font-size:1rem}
+.hintbtn.small svg{width:36px;height:42px}
+.hintsay{background:#fff6e0;border:2px solid #f1dca8;border-radius:14px;padding:10px 14px;margin:8px 0;font-size:1.15rem;font-weight:700;color:#3a2a14}
+.hintsay .tr{display:inline;font-size:1.35rem}
 .feedback{margin:12px 0;padding:12px;border-radius:14px;font-weight:700;text-align:center}
 .feedback.ok{background:var(--greenSoft);color:var(--green)}
 .feedback.no{background:var(--orangeSoft);color:var(--orange)}

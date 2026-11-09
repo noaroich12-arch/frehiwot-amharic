@@ -278,6 +278,32 @@ function fr(mood) {
 }
 function say(text, mood, extra) { return '<div class="say">' + fr(mood) + '<div class="bubble">' + text + (extra || '') + '</div></div>'; }
 
+/* ================= רמז מפריאות (כשנתקעים) ================= */
+/* תחילת התעתיק: מילה ראשונה מתוך משפט, או שתי האותיות הראשונות (עם הניקוד) מתוך מילה בודדת */
+function hintStart(tr) {
+  tr = String(tr || '').split(' / ')[0].trim();
+  var words = tr.split(/\s+/);
+  if (words.length > 1) return words[0] + ' ...';
+  var cl = tr.match(/[^֑-ׇ][֑-ׇ]*/g) || [tr];
+  return cl.length <= 2 ? cl[0] + '...' : cl.slice(0, 2).join('') + '...';
+}
+function hintBtn(fn, label) {
+  return '<div class="hintwrap"><button class="hintbtn" id="hintBtn" onclick="' + fn + '">' + fr('think') +
+    '<span>' + (label || 'נתקעת? לחצי עליי ואתן לך רמז') + '</span></button><div id="hintBox"></div></div>';
+}
+function showHint(html, done) {
+  var b = document.getElementById('hintBox'); if (b) b.innerHTML = '<div class="hintsay">💡 ' + html + '</div>';
+  var bt = document.getElementById('hintBtn');
+  if (bt) { if (done) bt.style.display = 'none'; else bt.querySelector('span').textContent = 'עוד רמז?'; }
+}
+/* מעלים תשובה לא נכונה אחת */
+function dropWrong(ans, n) {
+  var left = [];
+  for (var k = 0; k < n; k++) { var el = document.getElementById('o' + k); if (k !== ans && el && !el.classList.contains('gone')) left.push(el); }
+  if (left.length <= 1) return false;
+  var el = pick(left); el.classList.add('gone'); el.disabled = true; return true;
+}
+
 /* ================= הודעות, מודאל, קונפטי ================= */
 var toastT;
 function toast(t) { var el = document.getElementById('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(function () { el.classList.remove('on'); }, 2600); }
@@ -603,7 +629,10 @@ R.lesson = function (id) {
     var ri = reg(x);
     var body;
     if (stage) body = '<div class="stage">' + esc(x.he) + '</div>';
-    else if (me && turnMode && !x._shown) body = '<div class="he">' + esc(x.he) + '</div><button class="hidebox" style="width:100%;border:none" onclick="F.reveal(' + j + ')">🗣️ אמרי בקול, ואז לחצי לראות ולשמוע</button>';
+    else if (me && turnMode && !x._shown) body = '<div class="he">' + esc(x.he) + '</div>' +
+      (x._hint ? '<div class="hintsay">💡 מתחילים ככה: <span class="tr s">' + esc(lineHint(x.tr, x._hint)) + '</span></div>' : '') +
+      '<button class="hidebox" style="width:100%;border:none" onclick="F.reveal(' + j + ')">🗣️ אמרי בקול, ואז לחצי לראות ולשמוע</button>' +
+      ((x._hint || 0) < 2 ? '<button class="hintbtn small" onclick="F.lineHint(' + j + ')">' + fr('think') + '<span>' + (x._hint ? 'עוד רמז?' : 'נתקעת? לחצי עליי לרמז') + '</span></button>' : '');
     else body = trBox(x) + noteBox(x, false) + '<div class="he">' + esc(x.he) + '</div><div class="amx am">' + esc(x.am) + '</div>' +
       '<div class="acts"><button class="play small" onclick="F.p(' + ri + ',this)">🔊</button><button class="play small sec" onclick="F.ps(' + ri + ',this)">🐢</button><button class="play small sec" onclick="F.rec(' + ri + ')">🎙️</button><button class="play small sec" onclick="F.listen(' + ri + ')">👂🏾</button></div>';
     return '<div class="msg ' + (me ? 'me' : 'other') + '" id="m' + j + '"><div class="who">' + (me ? 'את' : esc(x.spk)) + '</div>' + body + '</div>';
@@ -633,7 +662,16 @@ function lessonNav(l) {
   var i = LESSONS.indexOf(l), p = LESSONS[i - 1], n = LESSONS[i + 1];
   return '<div class="navrow">' + (p ? '<button class="ibtn" onclick="F.go(\'lesson/' + p.id + '\')"><small>→ שיעור ' + p.num + '</small></button>' : '<span></span>') + (n ? '<button class="ibtn" onclick="F.go(\'lesson/' + n.id + '\')"><small>שיעור ' + n.num + ' ←</small></button>' : '') + '</div>';
 }
-F.turn = function () { turnMode = !turnMode; var l = lessonById(routeArgs[0]); l.lines.forEach(function (x) { x._shown = false; }); render(); };
+F.turn = function () { turnMode = !turnMode; var l = lessonById(routeArgs[0]); l.lines.forEach(function (x) { x._shown = false; x._hint = 0; }); render(); };
+/* רמז בשיחה: שלב 1 = תחילת המשפט, שלב 2 = חצי מהמילים */
+function lineHint(tr, h) {
+  tr = String(tr || '').split(' / ')[0].trim();
+  var w = tr.split(/\s+/);
+  if (w.length === 1) return hintStart(tr);
+  var n = h >= 2 ? Math.max(2, Math.ceil(w.length / 2)) : 1;
+  return n >= w.length ? hintStart(tr) : w.slice(0, n).join(' ') + ' ...';
+}
+F.lineHint = function (j) { var l = lessonById(routeArgs[0]); var x = l.lines[j]; x._hint = (x._hint || 0) + 1; var y = window.scrollY; render(); window.scrollTo(0, y); };
 F.reveal = function (j) { var l = lessonById(routeArgs[0]); var x = l.lines[j]; x._shown = true; var y = window.scrollY; render(); window.scrollTo(0, y); play(x.am); };
 F.playAll = function () {
   var l = lessonById(routeArgs[0]); var arr = l.lines.map(function (x, j) { return [x, j]; }).filter(function (p) { return FCore.normKey(p[0].am); });
@@ -682,12 +720,30 @@ function drawQ() {
     var inner = q.field === 'he' ? ((o.kind === 'w' && o.pic && q.type === 'listen' ? '<span class="e">' + picHTML(o.pic) + '</span>' : '') + esc(o.he)) : '<span class="tr s" style="font-size:1.35rem">' + esc(o.tr) + '</span>';
     return '<button class="opt" id="o' + k + '" onclick="F.ans(' + k + ')">' + inner + '</button>';
   }).join('') + '</div>';
-  setView(top(z.cfg.title) + '<div class="card">' + head + prompt + opts + '<div id="fb"></div></div>');
-  z.answered = false;
+  setView(top(z.cfg.title) + '<div class="card">' + head + prompt + opts + hintBtn('F.qHint()') + '<div id="fb"></div></div>');
+  z.answered = false; z.hint = 0;
   if (q.type === 'listen') setTimeout(function () { play(x.am); }, 300);
 }
+F.qHint = function () {
+  var z = QZ; if (!z || z.answered) return;
+  var q = z.cfg.qs[z.i], x = q.item, h = ++z.hint;
+  if (q.type === 'say') {
+    if (h === 1) showHint('מתחילים ככה: <span class="tr s">' + esc(hintStart(x.tr)) + '</span>');
+    else { play(x.am, true); showHint('הקשיבי, אני לוחשת לך לאט. עכשיו נסי להגיד בקול.', true); }
+    return;
+  }
+  var more = dropWrong(q.ans, q.opts.length);
+  var txt;
+  if (q.type === 'listen') { play(x.am, true); txt = 'השמעתי שוב לאט. ' + (more ? 'וגם הורדתי תשובה אחת שלא מתאימה.' : ''); }
+  else if (q.type === 'meaning') txt = (x.pic && x.kind === 'w' && h === 1 ? 'אולי זה יעזור: <span style="font-size:1.6rem">' + picHTML(x.pic) + '</span> ' : '') + 'הורדתי תשובה אחת שלא מתאימה.';
+  else txt = (h === 1 ? 'התשובה מתחילה ב: <span class="tr s">' + esc(hintStart(x.tr)) + '</span> ' : '') + 'והורדתי תשובה אחת שלא מתאימה.';
+  var left = document.querySelectorAll('.opt:not(.gone)').length;
+  if (left <= 2) txt += ' נשארו רק שתיים. את יכולה!';
+  showHint(txt, left <= 2);
+};
 F.ans = function (k) {
   var z = QZ; if (!z || z.answered) return; z.answered = true;
+  var hb = document.querySelector('.hintwrap'); if (hb) hb.style.display = 'none';
   var q = z.cfg.qs[z.i], ok = k === q.ans;
   document.getElementById('o' + q.ans).classList.add('ok');
   if (!ok) document.getElementById('o' + k).classList.add('no');
@@ -695,6 +751,7 @@ F.ans = function (k) {
 };
 F.sayReveal = function () {
   var z = QZ, q = z.cfg.qs[z.i], x = q.item, ri = reg(x);
+  var hb = document.querySelector('.hintwrap'); if (hb) hb.style.display = 'none';
   document.getElementById('sayBox').innerHTML = trBox(x) + '<div class="acts"><button class="play small" onclick="F.p(' + ri + ',this)">🔊</button></div><div class="row" style="justify-content:center"><button class="btn green" onclick="F.selfOk(1)">👍 אמרתי נכון</button><button class="btn sec" onclick="F.selfOk(0)">עוד לא</button></div>';
   play(x.am);
 };
@@ -1204,11 +1261,19 @@ function replyRound() {
   var who = p.a.spk === 'a' ? 'אשת הצוות' : p.a.spk;
   setView(top('מה עונים?') + '<div class="card"><div class="qhead"><span>שיעור ' + p.l.num + '</span><span>' + (G.i + 1) + ' / ' + G.items.length + '</span></div>' +
     say('אני ' + esc(who) + ', ואני אומרת:<br>' + trBox(p.a, 's') + '<span class="muted">' + esc(p.a.he) + '</span>', 'listen', ' <button class="play small" onclick="F.p(' + ra + ',this)">🔊</button>') +
-    '<div class="qprompt">מה עונים? 🗣️ אפשר להגיד קודם בקול</div><div class="opts">' + G.opts.map(function (o, k) { return '<button class="opt" id="o' + k + '" onclick="F.repAns(' + k + ')"><span style="font-size:1.25rem">' + esc(o.tr) + '</span><br><small class="muted">' + esc(o.he) + '</small></button>'; }).join('') + '</div><div id="fb"></div></div>');
+    '<div class="qprompt">מה עונים? 🗣️ אפשר להגיד קודם בקול</div><div class="opts">' + G.opts.map(function (o, k) { return '<button class="opt" id="o' + k + '" onclick="F.repAns(' + k + ')"><span style="font-size:1.25rem">' + esc(o.tr) + '</span><br><small class="muted">' + esc(o.he) + '</small></button>'; }).join('') + '</div>' + hintBtn('F.repHint()') + '<div id="fb"></div></div>');
+  G.hint = 0;
   setTimeout(function () { play(p.a.am); }, 300);
 }
+F.repHint = function () {
+  if (!G || G.done) return;
+  var p = G.items[G.i], h = ++G.hint;
+  if (h === 1) { dropWrong(G.ans, G.opts.length); showHint('התשובה מתחילה ב: <span class="tr s">' + esc(hintStart(p.b.tr)) + '</span> והורדתי תשובה אחת שלא מתאימה.'); }
+  else { play(p.b.am, true); showHint('הקשיבי, אני לוחשת לך את התשובה לאט.', true); }
+};
 F.repAns = function (k) {
   if (G.done) return; G.done = true;
+  var hb = document.querySelector('.hintwrap'); if (hb) hb.style.display = 'none';
   var p = G.items[G.i], ok = k === G.ans;
   document.getElementById('o' + G.ans).classList.add('ok'); if (!ok) document.getElementById('o' + k).classList.add('no');
   ding(ok); if (ok) G.right++; else G.wrong.push(p.b);
