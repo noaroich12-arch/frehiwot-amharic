@@ -212,14 +212,14 @@ function trHTML(tr, am) {
 }
 var LASTINFO = { notes: {}, say: '' };
 var NOTE_TXT = {
-  alef: 'האות א׳ החיוורת שותקת. היא רק מאריכה את התנועה שלפניה, ולא אומרים אותה.',
-  hsil: 'ה׳ החיוורת בסוף המילה שותקת. המילה נגמרת בתנועה.',
-  hpro: 'ה׳ בסוף המילה כן נשמעת: נשיפה קטנה ורכה בסוף.',
-  w: 'ו׳ עם תנועה נשמעת כמו w באנגלית (כמו בתחילת "ווטסאפ"), ולא כמו v.',
-  ny: 'נְי = "ני" צמוד, בהברה אחת.',
-  kw: 'קְוַ / גְוַ נאמרות מהר, בהברה אחת.',
-  gem: 'אות בכחול עם נקודה בתוכה (דגש) = צליל כפול. מחזיקים אותה רגע, כמו אִנַּאת = "אִנ־נַאת".',
-  ej: 'אות בסגול = "פופ" קטן בגרון.'
+  alef: 'את א׳ החיוורת לא אומרים.',
+  hsil: 'את ה׳ החיוורת בסוף לא אומרים.',
+  hpro: 'את ה׳ בסוף אומרים, בנשיפה קטנה.',
+  w: 'ו׳ כאן נשמעת כמו בתחילת "ווטסאפ".',
+  ny: 'נְי אומרים ביחד, כמו "ני".',
+  kw: 'קְוַ או גְוַ אומרים מהר וביחד.',
+  gem: 'אות כחולה: מחזיקים אותה עוד רגע.',
+  ej: 'אות סגולה: אפשר להגיד אותה קצת חזק. גם אם אומרים רגיל, מבינים.'
 };
 /* ⭐ שימי לב: הסבר על מה שמוזר בקריאה של המילה */
 function noteBox(x, big) {
@@ -228,8 +228,8 @@ function noteBox(x, big) {
   if (!keys.length) return '';
   var order = ['alef', 'hsil', 'hpro', 'w', 'ny', 'kw', 'gem', 'ej'].filter(function (k) { return info.notes[k]; });
   if (!big) return '<div class="starline">⭐ ' + order.map(function (k) { return esc(NOTE_TXT[k]); }).join(' ') + (info.say ? ' <b>אומרים בערך: ' + esc(info.say) + '</b>' : '') + '</div>';
-  return '<div class="starbox"><b>⭐ שימי לב</b><ul>' + order.map(function (k) { return '<li>' + esc(NOTE_TXT[k]) + '</li>'; }).join('') + '</ul>' +
-    (info.say ? '<div class="sayas">אומרים בערך: <b>' + esc(info.say) + '</b></div>' : '') + '<div class="muted" style="font-size:.85rem">לחיצה על אות צבועה או חיוורת: הסבר והשמעה איטית.</div></div>';
+  return '<div class="starbox"><b>⭐ טיפ קטן לקריאה</b><ul>' + order.map(function (k) { return '<li>' + esc(NOTE_TXT[k]) + '</li>'; }).join('') + '</ul>' +
+    (info.say ? '<div class="sayas">אומרים בערך: <b>' + esc(info.say) + '</b></div>' : '') + '</div>';
 }
 function trBox(x, cls) { return '<div class="tr ' + (cls || '') + '" data-am="' + esc(x.am) + '">' + trHTML(x.tr, x.am) + '</div>'; }
 document.addEventListener('click', function (e) {
@@ -237,8 +237,8 @@ document.addEventListener('click', function (e) {
   if (!m) return;
   var box = m.closest('[data-am]'); var am = box && box.getAttribute('data-am');
   var kind = m.getAttribute('data-m'), g = kind === 'g';
-  showModal('<div class="sheet"><h2>' + (kind === 's' ? '⭐ <span class="sil">אות שותקת</span>' : g ? '<span class="gem">אות כפולה</span>' : '<span class="ej">עיצור לחוץ</span>') + '</h2><p style="font-size:1.2rem">' +
-    (kind === 's' ? 'את האות החיוורת לא אומרים. היא רק עוזרת לקרוא את התנועה שלפניה. הקשיבי להשמעה האיטית.' : g ? 'החזיקי את הצליל עוד רגע. אם לא מחזיקים, לפעמים זו מילה אחרת.' : 'פופ קטן בגרון: עצירה קצרה ואז שחרור. אם לא יוצא, אומרים רגיל וזה עדיין מובן.') +
+  showModal('<div class="sheet"><h2>' + (kind === 's' ? '<span class="sil">אות חיוורת</span>' : g ? '<span class="gem">אות כחולה</span>' : '<span class="ej">אות סגולה</span>') + '</h2><p style="font-size:1.2rem">' +
+    (kind === 's' ? 'את האות הזאת לא אומרים. הקשיבי להשמעה האיטית.' : g ? 'מחזיקים את הצליל הזה עוד רגע קטן. הקשיבי להשמעה האיטית.' : 'אפשר להגיד אותה קצת חזק. גם אם אומרים אותה רגיל, מבינים. הקשיבי להשמעה האיטית.') +
     '</p><div class="acts"><button class="btn" onclick="F.slowAm()">🐢 השמעה איטית</button><button class="btn sec" onclick="F.closeModal()">סגירה</button></div></div>');
   F.slowAm = function () { play(am, true); };
   play(am, true);
@@ -600,7 +600,7 @@ R.cat = function (id, idx) {
 function legend(x) {
   var h = trHTML(x.tr, x.am), g = h.indexOf('class="gem"') >= 0, e = h.indexOf('class="ej"') >= 0;
   if (!g && !e) return '';
-  return '<div class="legend">' + (g ? '<span class="gem">כחול</span> = אות כפולה, מחזיקים רגע. ' : '') + (e ? '<span class="ej">סגול</span> = פופ קטן בגרון. ' : '') + 'לחצי על אות צבועה להסבר.</div>';
+  return '<div class="legend">' + (g ? '<span class="gem">כחול</span> = אות כפולה, מחזיקים רגע. ' : '') + (e ? '<span class="ej">סגול</span> = אפשר להגיד קצת חזק. ' : '') + 'לחצי על אות צבועה כדי לשמוע לאט.</div>';
 }
 F.gen = function (g) { gender = g; render(); };
 F.know = function (key) { var w = ITEM[key]; var on = !S.known[key]; setKnown(w, on); if (on) { ding(true); toast('גוֹבַּז! נכנסה לחזרה היומית'); var a = routeArgs; setTimeout(function () { go(nextHref(catById(a[0]), +a[1])); }, 450); } else render(); };
