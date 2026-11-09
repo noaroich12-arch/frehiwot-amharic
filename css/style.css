@@ -215,3 +215,12 @@ table.gt th{background:var(--accentSoft)}
   .album{grid-template-columns:repeat(4,1fr)}
 }
 @media (max-width:380px){html{font-size:17px}.tr{font-size:2rem}}
+
+/* אותיות שותקות ושימי לב */
+.sil{color:#a8998a;text-decoration:underline dotted 2px;text-underline-offset:7px;cursor:pointer}
+.starbox{background:#fff4d6;border:2px solid #f0c75e;border-radius:16px;padding:10px 14px;margin:12px 0 4px;text-align:right;font-size:1rem}
+.starbox ul{margin:6px 0;padding-inline-start:20px}
+.starbox li{margin:3px 0}
+.sayas{font-size:1.15rem;margin:6px 0}
+.sayas b{font-size:1.35rem}
+.starline{background:#fff4d6;border-radius:10px;padding:4px 10px;margin:4px 0;font-size:.92rem;color:#3b2f22}

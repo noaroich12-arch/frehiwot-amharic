@@ -39,10 +39,18 @@ function buildModel() {
   D = window.LANG_DATA[LANG];
   AUD = (window.AUDIO_MAP && window.AUDIO_MAP[LANG]) || {};
   LEVELS = D.levels; CATS = []; WORDS = []; LINES = []; ITEM = {}; BYHE = {};
-  D.cats.forEach(function (c) {
-    var cat = { id: c.id, he: c.he, ic: c.ic, lv: c.lv, intro: c.intro, w: [] };
+  var src = D.cats.map(function (c) { return Object.assign({}, c, { w: c.w.slice() }); });
+  (D.more || []).forEach(function (m) {
+    var rows = String(m.w || m.add || '').split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l.split('|').length >= 4; })
+      .map(function (l) { var p = l.split('|').map(function (x) { return x.trim(); }); return [p[0], p[1], p[2], p[3], p[4] === 'n' ? { noaudio: 1 } : {}]; });
+    var ex = src.filter(function (c) { return c.id === m.id; })[0];
+    if (ex) ex.w = ex.w.concat(rows); else src.push({ id: m.id, he: m.he, ic: m.ic, lv: m.lv, intro: m.intro, w: rows });
+  });
+  src.forEach(function (c) {
+    var cat = { id: c.id, he: c.he, ic: c.ic, lv: c.lv, intro: c.intro, w: [] }, inCat = {};
     c.w.forEach(function (t) {
       var w = mkWord(t, cat);
+      if (inCat[w.key]) return; inCat[w.key] = 1;
       cat.w.push(w);
       if (!ITEM[w.key]) { ITEM[w.key] = w; WORDS.push(w); }
       [w.he, t[0]].forEach(function (h) { var hk = h.replace(/[?!.]/g, '').trim(); if (!BYHE[hk]) BYHE[hk] = w; });
@@ -61,16 +69,23 @@ function buildModel() {
     return o;
   });
 }
+/* בעברית: "הוא אוכל / היא אוכלת" = שני משפטים שלמים; "בוא / בואי" = מילה אחת מתחלפת */
+function splitHe(he) {
+  if (he.indexOf(' / ') < 0) return null;
+  var p = he.split(' / ');
+  if (p.length === 2 && p[0].trim().split(/\s+/).length > 1 && p[1].trim().split(/\s+/).length > 1) return [p[0].trim(), p[1].trim()];
+  return FCore.splitGender(he);
+}
 function mkWord(t, cat) {
   var he = t[0], tr = t[1], am = t[2], pic = t[3], o = t[4] || {};
   var w = { kind: 'w', cat: cat.id, he: he, tr: tr, am: am, pic: pic, o: o, f: null };
   var g = !o.nog && FCore.splitGender(tr), ga = !o.nog && FCore.splitGender(am);
   if (g && ga) {
-    var gh = FCore.splitGender(he);
+    var gh = splitHe(he);
     w.tr = g[0]; w.am = ga[0]; w.he = gh ? gh[0] : he;
     w.f = { tr: g[1], am: ga[1], he: gh ? gh[1] : he };
   } else if (o.f) {
-    var gh2 = FCore.splitGender(he);
+    var gh2 = splitHe(he);
     w.he = gh2 ? gh2[0] : he;
     w.f = { tr: o.f[0], am: o.f[1], he: o.f[2] || (gh2 ? gh2[1] : he) };
   }
@@ -162,25 +177,68 @@ function trHTML(tr, am) {
     if (H.length === G.length) H.forEach(function (i, j) { if (G[j]) ej[i] = 1; });
     else if (G.length && G.every(function (x) { return x; })) H.forEach(function (i) { ej[i] = 1; });
   });
-  var out = '';
+  // מילים: כדי לדעת אם ה׳ בסוף נשמעת, מתאימים כל מילה בתעתיק למילה בכתב האמהרי
+  var wIdx = [], wn = -1;
+  cl.forEach(function (c, i) { if (c.h && (i === 0 || !cl[i - 1].h)) wn++; wIdx.push(c.h ? wn : -1); });
+  var gz = FCore.tokens(am || ''), aligned = gz.length === wn + 1;
+  var VOW = /[ִ-ֻ]/;
+  var out = '', say = '', notes = {};
   cl.forEach(function (c, i) {
-    var prev = cl[i - 1], start = !prev || !prev.h, b = c.t[0];
+    var prev = cl[i - 1], next = cl[i + 1], start = !prev || !prev.h, b = c.t[0];
+    var end = c.h && (!next || !next.h);
     var gem = c.h && c.t.indexOf(DAG) >= 0 && !start && 'בכפו'.indexOf(b) < 0 &&
       !(c.t.indexOf(SHVA) >= 0 && 'גדת'.indexOf(b) >= 0) && prev.h && prev.t.indexOf(SHVA) < 0;
-    if (gem) out += '<span class="gem" data-m="g">' + esc(c.t) + '</span>';
+    var marks = c.t.slice(1).replace(/[׳']/g, '');
+    var prevVowel = prev && prev.h && (VOW.test(prev.t) || /^ו[ֹּ]/.test(prev.t));
+    var sil = false;
+    if (c.h && b === 'א' && !marks && !start && prevVowel) { sil = true; notes.alef = 1; }
+    if (c.h && b === 'ה' && !marks && end && !start && prevVowel) {
+      var g = aligned ? gz[wIdx[i]] : '', lastC = g ? g.codePointAt(g.length - 1) : 0;
+      if ([0x1205, 0x1215, 0x1285].indexOf(lastC) >= 0 || (!aligned && /[ֵֶ]/.test(prev.t))) notes.hpro = 1;
+      else { sil = true; notes.hsil = 1; }
+    }
+    if (c.h && b === 'ו' && /[ְִֵֶַָ]/.test(c.t) && c.t.indexOf(DAG) < 0) notes.w = 1;
+    if (c.h && b === 'נ' && c.t.indexOf(SHVA) >= 0 && next && next.t[0] === 'י') notes.ny = 1;
+    if (c.h && (b === 'ק' || b === 'ג') && c.t.indexOf(SHVA) >= 0 && next && next.t[0] === 'ו' && /[ַָ]/.test(next.t)) notes.kw = 1;
+    if (gem) notes.gem = 1; else if (ej[i]) notes.ej = 1;
+    if (sil) out += '<span class="sil" data-m="s">' + esc(c.t) + '</span>';
+    else if (gem) out += '<span class="gem" data-m="g">' + esc(c.t) + '</span>';
     else if (ej[i]) out += '<span class="ej" data-m="e">' + esc(c.t) + '</span>';
     else out += esc(c.t);
+    if (!sil) say += c.t;
   });
+  LASTINFO = { notes: notes, say: (notes.alef || notes.hsil) ? say : '' };
   return out;
+}
+var LASTINFO = { notes: {}, say: '' };
+var NOTE_TXT = {
+  alef: 'האות א׳ החיוורת שותקת. היא רק מאריכה את התנועה שלפניה, ולא אומרים אותה.',
+  hsil: 'ה׳ החיוורת בסוף המילה שותקת. המילה נגמרת בתנועה.',
+  hpro: 'ה׳ בסוף המילה כן נשמעת: נשיפה קטנה ורכה בסוף.',
+  w: 'ו׳ עם תנועה נשמעת כמו w באנגלית (כמו בתחילת "ווטסאפ"), ולא כמו v.',
+  ny: 'נְי = "ני" צמוד, בהברה אחת.',
+  kw: 'קְוַ / גְוַ נאמרות מהר, בהברה אחת.',
+  gem: 'אות בכחול = צליל כפול. מחזיקים אותה רגע.',
+  ej: 'אות בסגול = "פופ" קטן בגרון.'
+};
+/* ⭐ שימי לב: הסבר על מה שמוזר בקריאה של המילה */
+function noteBox(x, big) {
+  trHTML(x.tr, x.am);
+  var info = LASTINFO, keys = Object.keys(info.notes);
+  if (!keys.length) return '';
+  var order = ['alef', 'hsil', 'hpro', 'w', 'ny', 'kw', 'gem', 'ej'].filter(function (k) { return info.notes[k]; });
+  if (!big) return '<div class="starline">⭐ ' + order.map(function (k) { return esc(NOTE_TXT[k]); }).join(' ') + (info.say ? ' <b>אומרים בערך: ' + esc(info.say) + '</b>' : '') + '</div>';
+  return '<div class="starbox"><b>⭐ שימי לב</b><ul>' + order.map(function (k) { return '<li>' + esc(NOTE_TXT[k]) + '</li>'; }).join('') + '</ul>' +
+    (info.say ? '<div class="sayas">אומרים בערך: <b>' + esc(info.say) + '</b></div>' : '') + '<div class="muted" style="font-size:.85rem">לחיצה על אות צבועה או חיוורת: הסבר והשמעה איטית.</div></div>';
 }
 function trBox(x, cls) { return '<div class="tr ' + (cls || '') + '" data-am="' + esc(x.am) + '">' + trHTML(x.tr, x.am) + '</div>'; }
 document.addEventListener('click', function (e) {
   var m = e.target.closest && e.target.closest('[data-m]');
   if (!m) return;
   var box = m.closest('[data-am]'); var am = box && box.getAttribute('data-am');
-  var g = m.getAttribute('data-m') === 'g';
-  showModal('<div class="sheet"><h2>' + (g ? '<span class="gem">אות כפולה</span>' : '<span class="ej">עיצור לחוץ</span>') + '</h2><p style="font-size:1.2rem">' +
-    (g ? 'החזיקי את הצליל עוד רגע. אם לא מחזיקים, לפעמים זו מילה אחרת.' : 'פופ קטן בגרון: עצירה קצרה ואז שחרור. אם לא יוצא, אומרים רגיל וזה עדיין מובן.') +
+  var kind = m.getAttribute('data-m'), g = kind === 'g';
+  showModal('<div class="sheet"><h2>' + (kind === 's' ? '⭐ <span class="sil">אות שותקת</span>' : g ? '<span class="gem">אות כפולה</span>' : '<span class="ej">עיצור לחוץ</span>') + '</h2><p style="font-size:1.2rem">' +
+    (kind === 's' ? 'את האות החיוורת לא אומרים. היא רק עוזרת לקרוא את התנועה שלפניה. הקשיבי להשמעה האיטית.' : g ? 'החזיקי את הצליל עוד רגע. אם לא מחזיקים, לפעמים זו מילה אחרת.' : 'פופ קטן בגרון: עצירה קצרה ואז שחרור. אם לא יוצא, אומרים רגיל וזה עדיין מובן.') +
     '</p><div class="acts"><button class="btn" onclick="F.slowAm()">🐢 השמעה איטית</button><button class="btn sec" onclick="F.closeModal()">סגירה</button></div></div>');
   F.slowAm = function () { play(am, true); };
   play(am, true);
@@ -418,10 +476,44 @@ R.station = function (n) {
     '<h2>🏁 מבחן קטן לסוף התחנה</h2><div class="card">' + say('10 שאלות קצרות על המילים והשיחות של התחנה. ' + (best != null ? 'התוצאה הכי טובה שלך: <b>' + best + '/10</b>.' : 'אין כאן ציון שמוריד. כל טעות היא הזדמנות לשמוע שוב.'), 'think') +
       '<button class="btn big" onclick="F.stationQuiz(' + lv.lv + ')">' + ((best || 0) >= 7 ? '✅ עברת! לנסות שוב' : 'למבחן התחנה') + '</button></div>');
 };
+var PART = 12;
+function nParts(c) { return Math.ceil(c.w.length / PART); }
+function partWords(c, k) { return c.w.slice(k * PART, (k + 1) * PART); }
+function nextHref(c, i) { return ((i + 1) % PART === 0 || i + 1 >= c.w.length) ? 'pend/' + c.id + '/' + Math.floor(i / PART) : 'cat/' + c.id + '/' + (i + 1); }
 function catTile(c) {
   var k = c.w.filter(function (w) { return S.known[w.key]; }).length;
-  return '<button class="tile" onclick="F.go(\'cat/' + c.id + '/0\')"><span class="e">' + c.ic + '</span>' + esc(c.he) + '<small>' + k + '/' + c.w.length + (k === c.w.length ? ' ✅' : '') + '</small></button>';
+  return '<button class="tile" onclick="F.go(\'catx/' + c.id + '\')"><span class="e">' + c.ic + '</span>' + esc(c.he) + '<small>' + c.w.length + ' מילים · ' + nParts(c) + ' שיעורים' + (k ? '<br>יודעת ' + k + (k === c.w.length ? ' ✅' : '') : '') + '</small></button>';
 }
+/* קטגוריה = כמה שיעורי מילים קצרים, 12 מילים בכל אחד */
+R.catx = function (id) {
+  var c = catById(id); if (!c) return go('words');
+  var rows = [];
+  for (var k = 0; k < nParts(c); k++) {
+    var pw = partWords(c, k), kn = pw.filter(function (w) { return S.known[w.key]; }).length, q = S.catq[id + ':' + k];
+    var done = q != null && q >= 4;
+    rows.push('<button class="li" onclick="F.go(\'cat/' + id + '/' + (k * PART) + '\')"><span class="e">' + (done ? '✅' : '📗') + '</span><span class="t"><b>שיעור מילים ' + (k + 1) + '</b><span class="muted">' + esc(pw.slice(0, 4).map(function (w) { return w.he; }).join(' · ')) + '…</span></span><span class="badge ' + (kn === pw.length ? 'g' : '') + '">' + kn + '/' + pw.length + '</span></button>');
+  }
+  setView(top(c.he) + say((c.intro ? esc(c.intro) + '<br>' : '') + 'יש כאן ' + c.w.length + ' מילים, מחולקות ל־' + nParts(c) + ' שיעורים קצרים. בסוף כל שיעור יש מבחן קטן.', 'happy') +
+    '<div class="list">' + rows.join('') + '</div>' +
+    '<p class="center"><button class="chip" onclick="F.go(\'catlist/' + id + '\')">📋 כל המילים ברשימה</button><button class="chip" onclick="F.catQuiz(\'' + id + '\')">🏁 מבחן על כל הקטגוריה</button></p>');
+};
+R.pend = function (id, k) {
+  var c = catById(id); if (!c) return go('words'); k = +k;
+  var pw = partWords(c, k), kn = pw.filter(function (w) { return S.known[w.key]; }).length, last = k + 1 >= nParts(c);
+  markDay();
+  setView(top(c.he) + say('<b>סיימת את שיעור מילים ' + (k + 1) + '!</b><br>את יודעת ' + kn + ' מתוך ' + pw.length + ' מילים בשיעור הזה. עכשיו מבחן קטן של 6 שאלות?', 'cheer') +
+    '<button class="btn big" onclick="F.partQuiz(\'' + id + '\',' + k + ')">🏁 למבחן הקטן</button><p></p>' +
+    (last ? '' : '<button class="btn big sec" onclick="F.go(\'cat/' + id + '/' + ((k + 1) * PART) + '\')">לשיעור מילים ' + (k + 2) + ' ←</button><p></p>') +
+    '<button class="btn big sec" onclick="F.go(\'catx/' + id + '\')">לכל השיעורים של "' + esc(c.he) + '"</button>');
+};
+F.partQuiz = function (id, k) {
+  var c = catById(id), pool = partWords(c, k).filter(function (w) { return !w.o.noaudio; });
+  if (pool.length < 2) return go('catx/' + id);
+  var pk = freshPick('pq:' + id + ':' + k, pool, Math.min(6, pool.length));
+  var types = ['listen', 'how', 'pic', 'listen', 'meaning', 'say'];
+  runQuiz({ title: 'מבחן קטן · ' + c.he + ' ' + (k + 1), qs: pk.map(function (w, i) { return makeQ(w, pool.concat(c.w), types[i % types.length]); }), back: 'catx/' + id, again: function () { F.partQuiz(id, k); },
+    onDone: function (s) { var key = id + ':' + k; S.catq[key] = Math.max(S.catq[key] || 0, s); pk.forEach(function (w) { seen(w); srsAdd(w.key); }); save(); return ''; } });
+};
 function lessonRow(l, nl) {
   var done = S.lessons[l.id], isNext = nl && nl.id === l.id;
   return '<button class="li ' + (isNext ? 'next' : '') + '" onclick="F.go(\'lesson/' + l.id + '\')"><span class="e">' + (done ? '✅' : isNext ? '📍' : '💬') + '</span><span class="t"><b>שיעור ' + l.num + ': ' + esc(l.t) + '</b><span class="muted">' + esc(l.sit.length > 70 ? l.sit.slice(0, 68) + '…' : l.sit) + '</span></span>' + (isNext ? '<span class="badge">מומלץ</span>' : '') + '</button>';
@@ -448,7 +540,7 @@ R.cat = function (id, idx) {
   var ex = w.o.ex ? reg({ tr: w.o.ex[0], am: w.o.ex[1], he: w.o.ex[2] }) : -1;
   setView(top(c.he) +
     (i === 0 && c.intro ? say(esc(c.intro), 'happy') : '') +
-    '<div class="row muted" style="justify-content:space-between"><span>' + (i + 1) + ' / ' + c.w.length + '</span><button class="star" onclick="F.star(\'' + esc(w.key) + '\',this)" aria-label="שמירה למילים שלי">' + (S.star[w.key] ? '⭐' : '☆') + '</button></div>' +
+    '<div class="row muted" style="justify-content:space-between"><span>שיעור מילים ' + (Math.floor(i / PART) + 1) + '/' + nParts(c) + ' · מילה ' + (i % PART + 1) + ' מתוך ' + partWords(c, Math.floor(i / PART)).length + '</span><button class="star" onclick="F.star(\'' + esc(w.key) + '\',this)" aria-label="שמירה למילים שלי">' + (S.star[w.key] ? '⭐' : '☆') + '</button></div>' +
     '<div class="wcard">' +
       '<div class="pic">' + picHTML(w.pic, w.he) + '</div>' +
       (w.f ? '<div class="gtog"><button class="' + (gender === 'm' ? 'on' : '') + '" onclick="F.gen(\'m\')">לבן</button><button class="' + (gender === 'f' ? 'on' : '') + '" onclick="F.gen(\'f\')">לבת</button></div>' : '') +
@@ -460,11 +552,11 @@ R.cat = function (id, idx) {
       '<div class="muted" style="font-size:.85rem">🔊 לחיצה נוספת = לאט · 🎙️ הקליטי והשווי · 👂🏾 ' + esc(D.guide.name) + ' מקשיבה</div>') +
       (ex >= 0 ? '<div class="note"><b>דוגמה:</b> <span style="font-size:1.25rem;font-weight:800">' + trHTML(it(ex).tr, it(ex).am) + '</span> – ' + esc(it(ex).he) + ' <button class="ibtn" style="height:40px;min-width:40px" onclick="F.p(' + ex + ',this)">🔊</button></div>' : '') +
       (w.o.note ? '<div class="note">' + esc(w.o.note) + '</div>' : '') +
-      legend(x) +
+      noteBox(x, true) +
     '</div>' +
     '<div class="navrow"><button class="ibtn" onclick="F.go(\'cat/' + c.id + '/' + (i - 1) + '\')" ' + (i === 0 ? 'disabled' : '') + '>→ הקודמת</button>' +
       '<button class="know ' + (known ? 'done' : '') + '" onclick="F.know(\'' + esc(w.key) + '\')">' + (known ? '✓ אני יודעת' : 'אני יודעת') + '</button>' +
-      '<button class="ibtn" onclick="F.go(\'cat/' + c.id + '/' + (i + 1) + '\')">הבאה ←</button></div>' +
+      '<button class="ibtn" onclick="F.go(\'' + nextHref(c, i) + '\')">הבאה ←</button></div>' +
     '<p class="center"><button class="chip" onclick="F.go(\'catlist/' + c.id + '\')">📋 כל המילים ברשימה</button><button class="chip" onclick="F.catQuiz(\'' + c.id + '\')">🏁 מבחן קטן</button></p>');
   setTimeout(function () { if (!w.o.noaudio) play(x.am); }, 250);
 };
@@ -474,7 +566,7 @@ function legend(x) {
   return '<div class="legend">' + (g ? '<span class="gem">כחול</span> = אות כפולה, מחזיקים רגע. ' : '') + (e ? '<span class="ej">סגול</span> = פופ קטן בגרון. ' : '') + 'לחצי על אות צבועה להסבר.</div>';
 }
 F.gen = function (g) { gender = g; render(); };
-F.know = function (key) { var w = ITEM[key]; var on = !S.known[key]; setKnown(w, on); if (on) { ding(true); toast('גוֹבֶּז! נכנסה לחזרה היומית'); var a = routeArgs; setTimeout(function () { go('cat/' + a[0] + '/' + (+a[1] + 1)); }, 450); } else render(); };
+F.know = function (key) { var w = ITEM[key]; var on = !S.known[key]; setKnown(w, on); if (on) { ding(true); toast('גוֹבֶּז! נכנסה לחזרה היומית'); var a = routeArgs; setTimeout(function () { go(nextHref(catById(a[0]), +a[1])); }, 450); } else render(); };
 F.star = function (key, b) { if (S.star[key]) delete S.star[key]; else S.star[key] = 1; save(); if (b) b.textContent = S.star[key] ? '⭐' : '☆'; toast(S.star[key] ? 'נשמרה ב"המילים שלי"' : 'הוסרה מ"המילים שלי"'); };
 function catEnd(c) {
   var k = c.w.filter(function (w) { return S.known[w.key]; }).length;
@@ -512,7 +604,7 @@ R.lesson = function (id) {
     var body;
     if (stage) body = '<div class="stage">' + esc(x.he) + '</div>';
     else if (me && turnMode && !x._shown) body = '<div class="he">' + esc(x.he) + '</div><button class="hidebox" style="width:100%;border:none" onclick="F.reveal(' + j + ')">🗣️ אמרי בקול, ואז לחצי לראות ולשמוע</button>';
-    else body = trBox(x) + '<div class="he">' + esc(x.he) + '</div><div class="amx am">' + esc(x.am) + '</div>' +
+    else body = trBox(x) + noteBox(x, false) + '<div class="he">' + esc(x.he) + '</div><div class="amx am">' + esc(x.am) + '</div>' +
       '<div class="acts"><button class="play small" onclick="F.p(' + ri + ',this)">🔊</button><button class="play small sec" onclick="F.ps(' + ri + ',this)">🐢</button><button class="play small sec" onclick="F.rec(' + ri + ')">🎙️</button><button class="play small sec" onclick="F.listen(' + ri + ')">👂🏾</button></div>';
     return '<div class="msg ' + (me ? 'me' : 'other') + '" id="m' + j + '"><div class="who">' + (me ? 'את' : esc(x.spk)) + '</div>' + body + '</div>';
   }).join('');

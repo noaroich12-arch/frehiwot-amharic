@@ -20,6 +20,8 @@ function add(s) {
     for (const t of FCore.tokens(p)) if (!out.has(t)) out.set(t, t);   // גם כל מילה בנפרד
   }
 }
+for (const m of (data.more || [])) for (const l of String(m.w || m.add || '').split('\n')) { const p = l.split('|'); if (p.length >= 4 && p[4] !== 'n') add(p[2].trim()); }
+delete data.more;
 (function walk(o) {
   if (typeof o === 'string') return add(o);
   if (Array.isArray(o)) return o.forEach(walk);
