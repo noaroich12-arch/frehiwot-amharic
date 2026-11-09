@@ -364,7 +364,7 @@ R.home = function () {
   var pct = rk.to < 99999 ? Math.round(100 * (rk.pts - rk.from) / (rk.to - rk.from)) : 100;
   setView(
     '<div class="top"><h1>לומדים עם ' + esc(g.name) + '</h1><button class="ibtn" onclick="F.go(\'about\')" aria-label="אודות">ℹ️</button></div>' +
-    '<div class="langs">' + langs + '</div>' +
+    (window.LANG_LIST.length > 1 ? '<div class="langs">' + langs + '</div>' : '') +
     say(bubble, 'happy', ' <button class="ibtn" style="height:40px;min-width:40px" onclick="F.pa(\'ሰላም\',this)" aria-label="השמעה">🔊</button>') +
     '<button class="daily" onclick="F.go(\'review\')"><span style="font-size:2rem">☀️</span><span>החזרה היומית שלי<small>' + (revToday ? '✓ סיימת להיום · אפשר עוד סיבוב' : '5 דקות · 10 פריטים') + '</small></span></button>' +
     '<div class="tiles">' +
@@ -400,7 +400,7 @@ R.home = function () {
 };
 F.lang = function (id) {
   var l = window.LANG_LIST.filter(function (x) { return x.id === id; })[0];
-  if (!l || !l.ready) { toast('רוסית תגיע בקרוב, עם מדריכה משלה'); return; }
+  if (!l || !l.ready) { toast('השפה הזו עוד לא מוכנה'); return; }
   if (id === LANG) return;
   try { localStorage.setItem('frehiwot.lang', id); } catch (e) {}
   location.reload();
