@@ -139,6 +139,11 @@ p{margin:6px 0}
 .opt.no{background:var(--orangeSoft);border-color:var(--orange)}
 .opt.gone{opacity:.25;text-decoration:line-through;pointer-events:none}
 
+/* מה עונים – הקשר */
+.ctxbox{background:#eef5ff;border:1px solid #cddcf5;border-radius:14px;padding:10px 14px;margin:10px 0;font-size:1.08rem;color:#1d2a3a}
+.ctxline{margin-top:4px}
+.ctxnow{background:#fff;border:2px solid var(--accent2);border-radius:14px;padding:10px 14px;margin:10px 0;font-size:1.1rem}
+
 /* רמז מפריאות */
 .hintwrap{margin:14px 0 4px}
 .hintbtn{display:flex;align-items:center;gap:10px;margin:8px auto 0;background:#fff6e0;border:2px solid #e9a23b;border-radius:18px;padding:6px 14px 6px 10px;font-size:1.1rem;font-weight:800;color:#3a2a14;cursor:pointer}
