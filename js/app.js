@@ -218,7 +218,7 @@ var NOTE_TXT = {
   w: 'ו׳ עם תנועה נשמעת כמו w באנגלית (כמו בתחילת "ווטסאפ"), ולא כמו v.',
   ny: 'נְי = "ני" צמוד, בהברה אחת.',
   kw: 'קְוַ / גְוַ נאמרות מהר, בהברה אחת.',
-  gem: 'אות בכחול = צליל כפול. מחזיקים אותה רגע.',
+  gem: 'אות בכחול עם נקודה בתוכה (דגש) = צליל כפול. מחזיקים אותה רגע, כמו אִנַּאת = "אִנ־נַאת".',
   ej: 'אות בסגול = "פופ" קטן בגרון.'
 };
 /* ⭐ שימי לב: הסבר על מה שמוזר בקריאה של המילה */
@@ -410,7 +410,7 @@ R.home = function () {
   var revToday = S.revDays.indexOf(today()) >= 0;
   var g = D.guide;
   var bubble = '<b>' + hourGreet() + '!</b> ' + (S.first ? 'אני ' + g.name + ', ואלמד אותך ' + g.langHe + ' מדוברת לגן ולשיחות עם הורים. כל מילה אפשר לשמוע.' :
-    revToday ? 'סיימת את החזרה של היום. גוֹבֶּז! אפשר להמשיך בשיעור הבא.' :
+    revToday ? 'סיימת את החזרה של היום. גוֹבַּז! אפשר להמשיך בשיעור הבא.' :
     !Object.keys(S.srs).length ? 'בואי נתחיל: "מילים ראשונות" או שיעור 1. כל מילה שתסמני "אני יודעת" תיכנס לחזרה היומית.' :
     'יש לך ' + Math.min(10, Math.max(due, Object.keys(S.srs).length)) + ' מילים לחזור עליהן היום.');
   var langs = window.LANG_LIST.map(function (l) { return '<button class="chip ' + (l.id === LANG ? 'on' : '') + '" onclick="F.lang(\'' + l.id + '\')">' + esc(l.name) + (l.ready ? '' : ' <small>(בקרוב)</small>') + '</button>'; }).join('');
@@ -566,7 +566,7 @@ function legend(x) {
   return '<div class="legend">' + (g ? '<span class="gem">כחול</span> = אות כפולה, מחזיקים רגע. ' : '') + (e ? '<span class="ej">סגול</span> = פופ קטן בגרון. ' : '') + 'לחצי על אות צבועה להסבר.</div>';
 }
 F.gen = function (g) { gender = g; render(); };
-F.know = function (key) { var w = ITEM[key]; var on = !S.known[key]; setKnown(w, on); if (on) { ding(true); toast('גוֹבֶּז! נכנסה לחזרה היומית'); var a = routeArgs; setTimeout(function () { go(nextHref(catById(a[0]), +a[1])); }, 450); } else render(); };
+F.know = function (key) { var w = ITEM[key]; var on = !S.known[key]; setKnown(w, on); if (on) { ding(true); toast('גוֹבַּז! נכנסה לחזרה היומית'); var a = routeArgs; setTimeout(function () { go(nextHref(catById(a[0]), +a[1])); }, 450); } else render(); };
 F.star = function (key, b) { if (S.star[key]) delete S.star[key]; else S.star[key] = 1; save(); if (b) b.textContent = S.star[key] ? '⭐' : '☆'; toast(S.star[key] ? 'נשמרה ב"המילים שלי"' : 'הוסרה מ"המילים שלי"'); };
 function catEnd(c) {
   var k = c.w.filter(function (w) { return S.known[w.key]; }).length;
@@ -946,7 +946,7 @@ F.listen = function (i) {
       var all = best.sc === exp.length;
       if (all) { award('ear'); confetti(); ding(true); }
       document.getElementById('lsOut').innerHTML = '<div class="card"><div class="words tr s">' + words + '</div>' +
-        say(all ? 'גוֹבֶּז! שמעתי את כל המילים.' : best.sc ? 'כמעט! לחצי על המילים בכתום כדי לשמוע אותן שוב, ונסי שוב.' : 'לא הצלחתי לשמוע הפעם. נסי לדבר קצת יותר לאט וקרוב למיקרופון.', all ? 'cheer' : 'listen') +
+        say(all ? 'גוֹבַּז! שמעתי את כל המילים.' : best.sc ? 'כמעט! לחצי על המילים בכתום כדי לשמוע אותן שוב, ונסי שוב.' : 'לא הצלחתי לשמוע הפעם. נסי לדבר קצת יותר לאט וקרוב למיקרופון.', all ? 'cheer' : 'listen') +
         '<p class="muted" style="font-size:.85rem">מה ששמעתי: <span class="am">' + esc(best.t) + '</span></p></div>';
     };
     r.onerror = function (e) {
