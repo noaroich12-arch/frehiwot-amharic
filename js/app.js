@@ -1194,7 +1194,10 @@ function buildRound() {
 }
 function drawBuild(fb) {
   var x = G.items[G.i], ri = reg(x);
-  setView(top('בני את המשפט') + '<div class="card"><div class="qhead"><span>בני את המשפט</span><span>' + (G.i + 1) + ' / ' + G.items.length + '</span></div>' +
+  var bl = x.lesson && lessonById(x.lesson), bx = bl && bl.lines[x.j];
+  var bctx = bl ? '<div class="ctxbox"><div><b>📍 שיעור ' + bl.num + ': ' + esc(bl.t) + '</b></div><div>' + esc(bl.sit) + '</div>' +
+    '<div style="margin-top:6px"><b>' + (bx && bx.spk !== 'a' ? esc(bx.spk) + ' אומר/ת:' : 'את אומרת:') + '</b></div></div>' : '';
+  setView(top('בני את המשפט') + '<div class="card"><div class="qhead"><span>בני את המשפט</span><span>' + (G.i + 1) + ' / ' + G.items.length + '</span></div>' + bctx +
     '<div class="qprompt">' + esc(x.he) + '</div><div class="acts"><button class="play small" onclick="F.p(' + ri + ',this)">🔊</button><button class="play small sec" onclick="F.ps(' + ri + ',this)">🐢</button></div>' +
     '<div class="slots">' + G.placed.map(function (ti, k) { return '<button class="wchip" onclick="F.unplace(' + k + ')">' + esc(G.toks[ti]) + '</button>'; }).join('') + (G.placed.length ? '' : '<span class="muted">לחצי על המילים לפי הסדר</span>') + '</div><p></p>' +
     '<div class="row" style="justify-content:center">' + G.order.map(function (ti) { return G.placed.indexOf(ti) >= 0 ? '' : '<button class="wchip" onclick="F.place(' + ti + ')">' + esc(G.toks[ti]) + '</button>'; }).join('') + '</div>' +
