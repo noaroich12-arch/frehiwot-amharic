@@ -22,7 +22,7 @@ function it(i) { return REG[i]; }
 var LANG = 'am';
 try { LANG = localStorage.getItem('frehiwot.lang') || 'am'; } catch (e) {}
 var S = null;
-function blank() { return { v: 1, known: {}, seen: {}, star: {}, lessons: {}, stations: {}, catq: {}, srs: {}, days: [], revDays: [], stickers: {}, fresh: {}, first: true, mine: [] }; }
+function blank() { return { v: 1, known: {}, seen: {}, star: {}, lessons: {}, stations: {}, catq: {}, plq: {}, srs: {}, days: [], revDays: [], stickers: {}, fresh: {}, first: true, mine: [] }; }
 function load() {
   var s = null;
   try { s = JSON.parse(localStorage.getItem('frehiwot.p.' + LANG) || 'null'); } catch (e) {}
@@ -67,6 +67,37 @@ function buildModel() {
       return x;
     });
     return o;
+  });
+  buildPaths();
+}
+/* ================= המפה: בכל תחנה דרך של שיעורים לפי הסדר =================
+   שיעור = עד 12 מילים מנושא אחד + מבחן קטן, ובחלק מהשיעורים גם שיחה.
+   מילה שכבר הופיעה בשיעור קודם באותה תחנה לא חוזרת. השיחות מתפזרות לאורך הדרך לפי הסדר שלהן. */
+var PATHS = {}, LPOS = {};
+function buildPaths() {
+  PATHS = {}; LPOS = {};
+  LEVELS.forEach(function (lv) {
+    var used = {}, steps = [];
+    CATS.filter(function (c) { return c.lv === lv.lv; }).forEach(function (c) {
+      var ws = c.w.filter(function (w) { if (used[w.key]) return false; used[w.key] = 1; return true; });
+      if (!ws.length) return;
+      var n = Math.max(1, Math.round(ws.length / PART)), size = Math.ceil(ws.length / n);
+      for (var k = 0; k * size < ws.length; k++) steps.push({ cat: c, words: ws.slice(k * size, (k + 1) * size), k: k, n: Math.ceil(ws.length / size) });
+    });
+    var ls = LESSONS.filter(function (l) { return l.lv === lv.lv; });
+    ls.forEach(function (l, j) {
+      var pos = Math.floor(j * steps.length / ls.length);
+      while (pos < steps.length && steps[pos].lesson) pos++;
+      if (pos < steps.length) steps[pos].lesson = l; else steps.push({ cat: null, words: [], lesson: l });
+    });
+    steps.forEach(function (s, i) {
+      s.lv = lv.lv; s.i = i;
+      s.key = s.cat ? 'p:' + s.cat.id + ':' + s.words[0].key : '';
+      s.title = s.cat ? s.cat.he + (s.n > 1 ? ' ' + (s.k + 1) : '') : s.lesson.t;
+      s.ic = s.cat ? s.cat.ic : '💬';
+      if (s.lesson) LPOS[s.lesson.id] = s;
+    });
+    PATHS[lv.lv] = steps;
   });
 }
 /* בעברית: "הוא אוכל / היא אוכלת" = שני משפטים שלמים; "בוא / בואי" = מילה אחת מתחלפת */
@@ -294,7 +325,7 @@ function lineCtx(x) {
   var nm = function (s) { return s === 'a' ? 'את' : s; };
   var prev = '';
   for (var t = x.j - 1; t >= 0; t--) { var y = l.lines[t]; if (y && FCore.normKey(y.am)) { prev = '<div class="ctxline"><b>' + esc(nm(y.spk)) + ':</b> ' + esc(y.he) + '</div>'; break; } }
-  return '<div class="ctxbox"><div><b>📍 שיעור ' + l.num + ': ' + esc(l.t) + '</b></div><div>' + esc(l.sit) + '</div>' +
+  return '<div class="ctxbox"><div><b>📍 שיחה ' + l.num + ': ' + esc(l.t) + '</b></div><div>' + esc(l.sit) + '</div>' +
     (prev ? '<div class="muted" style="margin-top:6px">רגע לפני:</div>' + prev : '') +
     '<div style="margin-top:6px"><b>עכשיו ' + (x.spk === 'a' ? 'את אומרת' : esc(x.spk) + ' אומר/ת') + ':</b></div></div>';
 }
@@ -370,7 +401,7 @@ function stickerDefs() {
   L.push({ id: 'rec', e: '🎙️', n: 'הקול שלי', h: 'מקליטים את עצמך ומשווים לקריינית' });
   L.push({ id: 'ear', e: '👂🏾', n: 'פריאות שמעה אותי', h: 'פריאות מזהה את כל המילים במשפט שאמרת' });
   CATS.forEach(function (c) { L.push({ id: 'c:' + c.id, e: c.ic, n: c.he, h: 'מסמנים "אני יודעת" על כל המילים בקטגוריה' }); });
-  LESSONS.forEach(function (l, i) { L.push({ id: 'l:' + l.id, e: EMO[i % EMO.length], n: 'שיעור ' + l.num, h: 'מסיימים את שיעור ' + l.num + ': ' + l.t }); });
+  LESSONS.forEach(function (l, i) { L.push({ id: 'l:' + l.id, e: EMO[i % EMO.length], n: 'שיחה ' + l.num, h: 'מסיימים את שיחה ' + l.num + ': ' + l.t }); });
   return L;
 }
 function award(id) {
@@ -448,23 +479,27 @@ R.home = function () {
   var g = D.guide;
   var bubble = '<b>' + hourGreet() + '!</b> ' + (S.first ? 'אני ' + g.name + ', ואלמד אותך ' + g.langHe + ' מדוברת לגן ולשיחות עם הורים. כל מילה אפשר לשמוע.' :
     revToday ? 'סיימת את החזרה של היום. גוֹבַּז! אפשר להמשיך בשיעור הבא.' :
-    !Object.keys(S.srs).length ? 'בואי נתחיל: "מילים ראשונות" או שיעור 1. כל מילה שתסמני "אני יודעת" תיכנס לחזרה היומית.' :
+    !Object.keys(S.srs).length ? 'בואי נתחיל במפה: תחנה 1, שיעור 1. כל מילה שתסמני "אני יודעת" תיכנס לחזרה היומית.' :
     'יש לך ' + Math.min(10, Math.max(due, Object.keys(S.srs).length)) + ' מילים לחזור עליהן היום.');
   var langs = window.LANG_LIST.map(function (l) { return '<button class="chip ' + (l.id === LANG ? 'on' : '') + '" onclick="F.lang(\'' + l.id + '\')">' + esc(l.name) + (l.ready ? '' : ' <small>(בקרוב)</small>') + '</button>'; }).join('');
-  var path = LEVELS.map(function (lv) {
-    var ls = LESSONS.filter(function (l) { return l.lv === lv.lv; }), dn = ls.filter(function (l) { return S.lessons[l.id]; }).length;
-    var passed = (S.stations[lv.lv] || 0) >= 7, isNext = nl && nl.lv === lv.lv;
-    return '<button class="station ' + (passed ? 'done ' : '') + (isNext ? 'next' : '') + '" onclick="F.go(\'station/' + lv.lv + '\')"><span class="num">' + (passed ? '✅' : lv.ic) + '</span><span class="grow"><b>תחנה ' + lv.lv + ': ' + esc(lv.short) + '</b><br><span class="small">' + esc(lv.t) + ' · ' + dn + '/' + ls.length + ' שיעורים' + (isNext ? ' · <b style="color:var(--accent)">ממשיכים מכאן</b>' : '') + '</span></span><span>←</span></button>';
-  }).join('');
+  var ns = nextStep();
+  var path = trail(LEVELS.map(function (lv) {
+    var st = PATHS[lv.lv] || [], dn = st.filter(stepDone).length;
+    var passed = (S.stations[lv.lv] || 0) >= 7, isNext = ns && ns.lv === lv.lv, all = st.length && dn === st.length;
+    return { cls: all || passed ? 'done' : isNext ? 'next' : '', href: 'station/' + lv.lv, ic: all ? '✅' : lv.ic, num: lv.lv,
+      label: '<b>תחנה ' + lv.lv + ': ' + esc(lv.short) + '</b><span>' + dn + ' מתוך ' + st.length + ' שיעורים</span>' + (isNext ? '<em>📍 ממשיכים מכאן</em>' : '') };
+  }), 'big');
   var pct = rk.to < 99999 ? Math.round(100 * (rk.pts - rk.from) / (rk.to - rk.from)) : 100;
   setView(
     '<div class="top"><h1>לומדים עם ' + esc(g.name) + '</h1><button class="ibtn" onclick="F.go(\'about\')" aria-label="אודות">ℹ️</button></div>' +
     (window.LANG_LIST.length > 1 ? '<div class="langs">' + langs + '</div>' : '') +
     say(bubble, 'happy', ' <button class="ibtn" style="height:40px;min-width:40px" onclick="F.pa(\'ሰላም\',this)" aria-label="השמעה">🔊</button>') +
     '<button class="daily" onclick="F.go(\'review\')"><span style="font-size:2rem">☀️</span><span>החזרה היומית שלי<small>' + (revToday ? '✓ סיימת להיום · אפשר עוד סיבוב' : '5 דקות · 10 פריטים') + '</small></span></button>' +
+    (ns ? '<button class="btn big" style="margin-top:12px" onclick="F.go(\'pl/' + ns.lv + '/' + ns.i + '\')">📍 להמשיך: תחנה ' + ns.lv + ', שיעור ' + (ns.i + 1) + ' – ' + esc(ns.title) + '</button>' : '') +
+    '<h2>🗺️ המפה שלי</h2><p class="muted">חמש תחנות בדרך. לוחצים על תחנה, ובפנים יש דרך של שיעורים לפי הסדר.</p>' + path +
     '<div class="tiles">' +
       '<button class="tile" onclick="F.go(\'words\')"><span class="e">🗂️</span>מילים<small>' + WORDS.length + ' כרטיסיות</small></button>' +
-      '<button class="tile" onclick="F.go(\'lessons\')"><span class="e">💬</span>שיחות<small>' + LESSONS.length + ' שיעורים</small></button>' +
+      '<button class="tile" onclick="F.go(\'lessons\')"><span class="e">💬</span>שיחות<small>' + LESSONS.length + ' שיחות</small></button>' +
       '<button class="tile" onclick="F.go(\'pron\')"><span class="e">🎙️</span>תרגול הגייה<small>שמיעה, הקלטה, השוואה</small></button>' +
       '<button class="tile" onclick="F.go(\'games\')"><span class="e">🎲</span>משחקים<small>5 משחקים</small></button>' +
     '</div>' +
@@ -473,8 +508,6 @@ R.home = function () {
       '<div class="stat"><b>' + knownCount() + '</b><span>מילים שאני יודעת</span></div></div>' +
     '<div class="card"><div class="row"><b class="grow">הרמה שלי: ' + rk.name + '</b>' + (rk.next ? '<span class="muted">הבאה: ' + rk.next + '</span>' : '') + '</div><div class="bar" style="margin-top:8px"><i style="width:' + pct + '%"></i></div>' +
       '<p class="muted" style="margin-top:8px">השבוע למדת ' + ws.words + ' מילים חדשות ותרגלת ' + ws.days + ' ימים.</p></div>' +
-    (nl ? '<button class="btn big" onclick="F.go(\'lesson/' + nl.id + '\')">📍 להמשיך: שיעור ' + nl.num + ' – ' + esc(nl.t) + '</button>' : '') +
-    '<h2>המסלול שלי</h2><div class="path">' + path + '</div>' +
     '<h2>עוד דברים טובים</h2><div class="menu">' +
       '<button onclick="F.go(\'read\')">📖 איך קוראים</button>' +
       '<button onclick="F.go(\'steps\')">🧭 שיחה טיפולית צעד אחר צעד</button>' +
@@ -506,12 +539,100 @@ R.station = function (n) {
   var lv = LEVELS.filter(function (x) { return String(x.lv) === String(n); })[0]; if (!lv) return go('home');
   var cats = CATS.filter(function (c) { return c.lv === lv.lv; }), ls = LESSONS.filter(function (l) { return l.lv === lv.lv; });
   var nl = nextLesson(), best = S.stations[lv.lv];
+  var steps = PATHS[lv.lv] || [], dn = steps.filter(stepDone).length, nx = nextStep(lv.lv);
+  var nodes = steps.map(function (s) {
+    var done = stepDone(s), isNext = nx === s;
+    return { cls: done ? 'done' : isNext ? 'next' : '', href: 'pl/' + lv.lv + '/' + s.i, ic: done ? '✅' : s.ic, num: s.i + 1,
+      label: '<b>שיעור ' + (s.i + 1) + '</b><span>' + (s.lesson ? '💬 ' : '') + esc(s.title) + '</span>' + (isNext ? '<em>📍 ממשיכים מכאן</em>' : '') };
+  });
   setView(top('תחנה ' + lv.lv + ': ' + lv.short) +
-    say('<b>' + esc(lv.t) + '</b><br>' + esc(lv.d), 'happy') +
-    '<h2>🗂️ מילים לתחנה</h2><div class="grid2">' + cats.map(catTile).join('') + '</div>' +
-    '<h2>💬 השיחות</h2><div class="list">' + ls.map(function (l) { return lessonRow(l, nl); }).join('') + '</div>' +
+    say('<b>' + esc(lv.t) + '</b><br>' + esc(lv.d) + '<br>יש כאן ' + steps.length + ' שיעורים. הולכים בדרך לפי הסדר: בכל שיעור מילים חדשות ומבחן קטן, וסימן 💬 אומר שיש בשיעור גם שיחה.', 'happy') +
+    '<div class="card"><div class="row"><b class="grow">עברת ' + dn + ' מתוך ' + steps.length + ' שיעורים</b>' + (nx ? '<button class="btn" onclick="F.go(\'pl/' + lv.lv + '/' + nx.i + '\')">📍 לשיעור ' + (nx.i + 1) + '</button>' : '<span class="badge g">סיימת את כל הדרך ✅</span>') + '</div><div class="bar" style="margin-top:8px"><i style="width:' + Math.round(100 * dn / Math.max(1, steps.length)) + '%"></i></div></div>' +
+    trail(nodes, 'small') +
     '<h2>🏁 מבחן קטן לסוף התחנה</h2><div class="card">' + say('10 שאלות קצרות על המילים והשיחות של התחנה. ' + (best != null ? 'התוצאה הכי טובה שלך: <b>' + best + '/10</b>.' : 'אין כאן ציון שמוריד. כל טעות היא הזדמנות לשמוע שוב.'), 'think') +
-      '<button class="btn big" onclick="F.stationQuiz(' + lv.lv + ')">' + ((best || 0) >= 7 ? '✅ עברת! לנסות שוב' : 'למבחן התחנה') + '</button></div>');
+      '<button class="btn big" onclick="F.stationQuiz(' + lv.lv + ')">' + ((best || 0) >= 7 ? '✅ עברת! לנסות שוב' : 'למבחן התחנה') + '</button></div>' +
+    '<details class="more"><summary>🗂️ כל המילים של התחנה לפי נושא</summary><div class="grid2">' + cats.map(catTile).join('') + '</div></details>' +
+    '<details class="more"><summary>💬 כל השיחות של התחנה</summary><div class="list">' + ls.map(function (l) { return lessonRow(l, nl); }).join('') + '</div></details>');
+  var cur = document.querySelector('.trail .node.next');
+  if (cur && dn) setTimeout(function () { cur.scrollIntoView({ block: 'center' }); }, 60);
+};
+/* ציור הדרך: עיגולים בזיגזג רך, עם קו מנוקד ביניהם */
+var ZIG = [50, 66, 75, 66, 50, 34, 25, 34], ZIGB = [50, 62, 68, 62, 50, 38, 32, 38];
+function trail(nodes, size) {
+  var Z = size === 'big' ? ZIGB : ZIG, H = size === 'big' ? 215 : 172, h = nodes.length * H, cy = size === 'big' ? 52 : 42;
+  var pts = nodes.map(function (n, i) { return [Z[i % Z.length], i * H + cy]; });
+  var d = pts.map(function (p, i) {
+    if (!i) return 'M' + p[0] + ' ' + p[1];
+    var q = pts[i - 1], my = (q[1] + p[1]) / 2;
+    return 'C' + q[0] + ' ' + my + ' ' + p[0] + ' ' + my + ' ' + p[0] + ' ' + p[1];
+  }).join(' ');
+  return '<div class="trail ' + (size || '') + '" style="height:' + h + 'px">' +
+    '<svg viewBox="0 0 100 ' + h + '" preserveAspectRatio="none" aria-hidden="true"><path d="' + d + '" /></svg>' +
+    nodes.map(function (n, i) {
+      return '<button class="node ' + n.cls + '" style="top:' + (i * H) + 'px;left:' + Z[i % Z.length] + '%" onclick="F.go(\'' + n.href + '\')">' +
+        '<span class="dot"><span class="ic">' + n.ic + '</span><span class="nm">' + n.num + '</span></span><span class="lab">' + n.label + '</span></button>';
+    }).join('') + '</div>';
+}
+function stepWordsDone(s) { return !s.cat || (S.plq[s.key] || 0) >= 4 || s.words.every(function (w) { return S.known[w.key]; }); }
+function stepDone(s) { return stepWordsDone(s) && (!s.lesson || !!S.lessons[s.lesson.id]); }
+function nextStep(lv) {
+  var lvs = lv != null ? [lv] : LEVELS.map(function (x) { return x.lv; });
+  for (var a = 0; a < lvs.length; a++) { var st = PATHS[lvs[a]] || []; for (var i = 0; i < st.length; i++) if (!stepDone(st[i])) return st[i]; }
+  return null;
+}
+F._t = function () { return { PATHS: PATHS, LEVELS: LEVELS, S: S, QZ: QZ, WORDS: WORDS, LINES: LINES, audioUrl: audioUrl }; };  // לבדיקות
+function stepOf(lv, i) { var st = PATHS[lv] || PATHS[+lv]; return st ? st[+i] : null; }
+/* דף של שיעור אחד בדרך */
+R.pl = function (lv, i) {
+  var s = stepOf(lv, i); if (!s) return go('station/' + lv);
+  var lvo = LEVELS.filter(function (x) { return String(x.lv) === String(lv); })[0], st = PATHS[s.lv];
+  var kn = s.words.filter(function (w) { return S.known[w.key]; }).length, q = S.plq[s.key];
+  var wDone = stepWordsDone(s), lDone = s.lesson && S.lessons[s.lesson.id], all = stepDone(s);
+  var nextKind = !s.cat ? 'l' : (S.seenStep && S.seenStep[s.key]) || kn ? (wDone ? 'l' : 'q') : 'w';
+  function stepBtn(kind, n, ic, title, sub, done, href) {
+    var isNext = !done && !all && kind === nextKind;
+    return '<button class="li ' + (isNext ? 'next' : '') + '" onclick="' + href + '"><span class="e">' + (done ? '✅' : ic) + '</span><span class="t"><b>' + n + '. ' + title + '</b><span class="muted">' + sub + '</span></span>' + (isNext ? '<span class="badge">עכשיו</span>' : '') + '</button>';
+  }
+  var rows = [], n = 0;
+  if (s.cat) {
+    rows.push(stepBtn('w', ++n, '🗂️', s.words.length + ' מילים: ' + esc(s.title), esc(s.words.slice(0, 4).map(function (w) { return w.he; }).join(' · ')) + '…' + (kn ? ' · יודעת ' + kn + '/' + s.words.length : ''), false, 'F.go(\'plw/' + s.lv + '/' + s.i + '/0\')'));
+    rows.push(stepBtn('q', ++n, '🏁', 'מבחן קטן', '6 שאלות על המילים של השיעור' + (q != null ? ' · הכי טוב: ' + q + '/6' : ''), wDone, 'F.plQuiz(' + s.lv + ',' + s.i + ')'));
+  }
+  if (s.lesson) rows.push(stepBtn('l', ++n, '💬', 'שיחה: ' + esc(s.lesson.t), esc(s.lesson.sit.length > 70 ? s.lesson.sit.slice(0, 68) + '…' : s.lesson.sit), lDone, 'F.go(\'lesson/' + s.lesson.id + '\')'));
+  var nxt = st[s.i + 1], prv = st[s.i - 1];
+  setView(top('תחנה ' + s.lv + ' · שיעור ' + (s.i + 1)) +
+    say(all ? '<b>סיימת את שיעור ' + (s.i + 1) + '! גוֹבַּז!</b><br>אפשר להמשיך לשיעור הבא, או לחזור על המילים.' :
+      '<b>שיעור ' + (s.i + 1) + ' מתוך ' + st.length + ': ' + esc(s.title) + '</b><br>' + (s.cat && s.k === 0 && s.cat.intro ? esc(s.cat.intro) + '<br>' : '') + 'עוברים לפי הסדר: ' + (s.cat ? 'קודם המילים, אחר כך מבחן קטן' + (s.lesson ? ', ובסוף שיחה.' : '.') : 'שיחה אחת, ובסופה תרגול קצר.'), all ? 'cheer' : 'happy') +
+    '<div class="list">' + rows.join('') + '</div>' +
+    (all && nxt ? '<button class="btn big" onclick="F.go(\'pl/' + s.lv + '/' + nxt.i + '\')">לשיעור ' + (nxt.i + 1) + ' ←</button>' : '') +
+    (all && !nxt ? '<button class="btn big" onclick="F.stationQuiz(' + s.lv + ')">🏁 סיימת את הדרך! למבחן של התחנה</button>' : '') +
+    '<div class="navrow">' + (prv ? '<button class="ibtn" onclick="F.go(\'pl/' + s.lv + '/' + prv.i + '\')"><small>→ שיעור ' + (prv.i + 1) + '</small></button>' : '<span></span>') +
+      '<button class="ibtn" onclick="F.go(\'station/' + s.lv + '\')"><small>🗺️ המפה של תחנה ' + s.lv + '</small></button>' +
+      (nxt ? '<button class="ibtn" onclick="F.go(\'pl/' + s.lv + '/' + nxt.i + '\')"><small>שיעור ' + (nxt.i + 1) + ' ←</small></button>' : '<span></span>') + '</div>');
+};
+/* הכרטיסיות של שיעור בדרך */
+R.plw = function (lv, i, idx) {
+  var s = stepOf(lv, i); if (!s || !s.cat) return go('station/' + lv);
+  var k = Math.max(0, Math.min(s.words.length - 1, +idx || 0));
+  if (!S.seenStep) S.seenStep = {};
+  if (!S.seenStep[s.key]) { S.seenStep[s.key] = today(); save(); }
+  var base = 'plw/' + s.lv + '/' + s.i + '/';
+  cardView({ w: s.words[k], title: 'שיעור ' + (s.i + 1) + ': ' + s.title, intro: '',
+    label: 'שיעור ' + (s.i + 1) + ' · מילה ' + (k + 1) + ' מתוך ' + s.words.length,
+    prev: k > 0 ? base + (k - 1) : null, next: k + 1 < s.words.length ? base + (k + 1) : 'pl/' + s.lv + '/' + s.i,
+    chips: '<button class="chip" onclick="F.go(\'pl/' + s.lv + '/' + s.i + '\')">↩ לדף השיעור</button><button class="chip" onclick="F.plQuiz(' + s.lv + ',' + s.i + ')">🏁 מבחן קטן</button>' });
+};
+F.plQuiz = function (lv, i) {
+  var s = stepOf(lv, i), pool = s.words.filter(function (w) { return !w.o.noaudio; });
+  if (pool.length < 2) { S.plq[s.key] = 6; save(); return go('pl/' + lv + '/' + i); }
+  var pk = freshPick('plq:' + s.key, pool, Math.min(6, pool.length));
+  var types = ['listen', 'how', 'pic', 'listen', 'meaning', 'say'];
+  runQuiz({ title: 'מבחן קטן · שיעור ' + (s.i + 1), qs: pk.map(function (w, j) { return makeQ(w, pool.concat(s.cat.w), types[j % types.length]); }), back: 'pl/' + lv + '/' + i, again: function () { F.plQuiz(lv, i); },
+    onDone: function (sc) {
+      var was = stepDone(s);
+      S.plq[s.key] = Math.max(S.plq[s.key] || 0, Math.round(sc * 6 / pk.length)); pk.forEach(function (w) { seen(w); srsAdd(w.key); }); save(); markDay();
+      return !was && stepWordsDone(s) ? '<br>' + (s.lesson && !S.lessons[s.lesson.id] ? 'עכשיו נשארה השיחה של השיעור.' : 'סיימת את שיעור ' + (s.i + 1) + '!') : (stepWordsDone(s) ? '' : '<br>כדי לסמן את השיעור כגמור צריך לענות נכון על רוב השאלות. אפשר לנסות שוב, כל סיבוב עם שאלות אחרות.');
+    } });
 };
 var PART = 12;
 function nParts(c) { return Math.ceil(c.w.length / PART); }
@@ -553,7 +674,7 @@ F.partQuiz = function (id, k) {
 };
 function lessonRow(l, nl) {
   var done = S.lessons[l.id], isNext = nl && nl.id === l.id;
-  return '<button class="li ' + (isNext ? 'next' : '') + '" onclick="F.go(\'lesson/' + l.id + '\')"><span class="e">' + (done ? '✅' : isNext ? '📍' : '💬') + '</span><span class="t"><b>שיעור ' + l.num + ': ' + esc(l.t) + '</b><span class="muted">' + esc(l.sit.length > 70 ? l.sit.slice(0, 68) + '…' : l.sit) + '</span></span>' + (isNext ? '<span class="badge">מומלץ</span>' : '') + '</button>';
+  return '<button class="li ' + (isNext ? 'next' : '') + '" onclick="F.go(\'lesson/' + l.id + '\')"><span class="e">' + (done ? '✅' : isNext ? '📍' : '💬') + '</span><span class="t"><b>שיחה ' + l.num + ': ' + esc(l.t) + '</b><span class="muted">' + esc(l.sit.length > 70 ? l.sit.slice(0, 68) + '…' : l.sit) + '</span></span>' + (isNext ? '<span class="badge">מומלץ</span>' : '') + '</button>';
 }
 
 /* ================= מילים ================= */
@@ -569,15 +690,24 @@ R.cat = function (id, idx) {
   var c = catById(id); if (!c) return go('words');
   var i = Math.max(0, Math.min(c.w.length, +idx || 0));
   if (i >= c.w.length) return catEnd(c);
-  var w = c.w[i]; seen(w);
+  cardView({ w: c.w[i], title: c.he, intro: i === 0 ? c.intro : '',
+    label: 'שיעור מילים ' + (Math.floor(i / PART) + 1) + '/' + nParts(c) + ' · מילה ' + (i % PART + 1) + ' מתוך ' + partWords(c, Math.floor(i / PART)).length,
+    prev: i > 0 ? 'cat/' + c.id + '/' + (i - 1) : null, next: nextHref(c, i),
+    chips: '<button class="chip" onclick="F.go(\'catlist/' + c.id + '\')">📋 כל המילים ברשימה</button><button class="chip" onclick="F.catQuiz(\'' + c.id + '\')">🏁 מבחן קטן</button>' });
+};
+/* כרטיסייה של מילה אחת: משותפת לקטגוריות ולשיעורים שבמפה */
+var CARD_NEXT = null;
+function cardView(o) {
+  var w = o.w; seen(w);
+  CARD_NEXT = o.next;
   var x = gender === 'f' && w.f ? { tr: w.f.tr, am: w.f.am, he: w.f.he } : w;
   var ri = reg({ am: x.am, tr: x.tr, he: x.he });
   var lat = gender === 'f' && w.f ? null : w.lat;
   var known = S.known[w.key];
   var ex = w.o.ex ? reg({ tr: w.o.ex[0], am: w.o.ex[1], he: w.o.ex[2] }) : -1;
-  setView(top(c.he) +
-    (i === 0 && c.intro ? say(esc(c.intro), 'happy') : '') +
-    '<div class="row muted" style="justify-content:space-between"><span>שיעור מילים ' + (Math.floor(i / PART) + 1) + '/' + nParts(c) + ' · מילה ' + (i % PART + 1) + ' מתוך ' + partWords(c, Math.floor(i / PART)).length + '</span><button class="star" onclick="F.star(\'' + esc(w.key) + '\',this)" aria-label="שמירה למילים שלי">' + (S.star[w.key] ? '⭐' : '☆') + '</button></div>' +
+  setView(top(o.title) +
+    (o.intro ? say(esc(o.intro), 'happy') : '') +
+    '<div class="row muted" style="justify-content:space-between"><span>' + esc(o.label) + '</span><button class="star" onclick="F.star(\'' + esc(w.key) + '\',this)" aria-label="שמירה למילים שלי">' + (S.star[w.key] ? '⭐' : '☆') + '</button></div>' +
     '<div class="wcard">' +
       '<div class="pic">' + picHTML(w.pic, w.he) + '</div>' +
       (w.f ? '<div class="gtog"><button class="' + (gender === 'm' ? 'on' : '') + '" onclick="F.gen(\'m\')">לבן</button><button class="' + (gender === 'f' ? 'on' : '') + '" onclick="F.gen(\'f\')">לבת</button></div>' : '') +
@@ -591,19 +721,19 @@ R.cat = function (id, idx) {
       (w.o.note ? '<div class="note">' + esc(w.o.note) + '</div>' : '') +
       noteBox(x, true) +
     '</div>' +
-    '<div class="navrow"><button class="ibtn" onclick="F.go(\'cat/' + c.id + '/' + (i - 1) + '\')" ' + (i === 0 ? 'disabled' : '') + '>→ הקודמת</button>' +
+    '<div class="navrow"><button class="ibtn" onclick="F.go(\'' + (o.prev || '') + '\')" ' + (o.prev ? '' : 'disabled') + '>→ הקודמת</button>' +
       '<button class="know ' + (known ? 'done' : '') + '" onclick="F.know(\'' + esc(w.key) + '\')">' + (known ? '✓ אני יודעת' : 'אני יודעת') + '</button>' +
-      '<button class="ibtn" onclick="F.go(\'' + nextHref(c, i) + '\')">הבאה ←</button></div>' +
-    '<p class="center"><button class="chip" onclick="F.go(\'catlist/' + c.id + '\')">📋 כל המילים ברשימה</button><button class="chip" onclick="F.catQuiz(\'' + c.id + '\')">🏁 מבחן קטן</button></p>');
+      '<button class="ibtn" onclick="F.go(\'' + o.next + '\')">הבאה ←</button></div>' +
+    '<p class="center">' + o.chips + '</p>');
   setTimeout(function () { if (!w.o.noaudio) play(x.am); }, 250);
-};
+}
 function legend(x) {
   var h = trHTML(x.tr, x.am), g = h.indexOf('class="gem"') >= 0, e = h.indexOf('class="ej"') >= 0;
   if (!g && !e) return '';
   return '<div class="legend">' + (g ? '<span class="gem">כחול</span> = אות כפולה, מחזיקים רגע. ' : '') + (e ? '<span class="ej">סגול</span> = אפשר להגיד קצת חזק. ' : '') + 'לחצי על אות צבועה כדי לשמוע לאט.</div>';
 }
 F.gen = function (g) { gender = g; render(); };
-F.know = function (key) { var w = ITEM[key]; var on = !S.known[key]; setKnown(w, on); if (on) { ding(true); toast('גוֹבַּז! נכנסה לחזרה היומית'); var a = routeArgs; setTimeout(function () { go(nextHref(catById(a[0]), +a[1])); }, 450); } else render(); };
+F.know = function (key) { var w = ITEM[key]; var on = !S.known[key]; setKnown(w, on); if (on) { ding(true); toast('גוֹבַּז! נכנסה לחזרה היומית'); var nx = CARD_NEXT; setTimeout(function () { go(nx); }, 450); } else render(); };
 F.star = function (key, b) { if (S.star[key]) delete S.star[key]; else S.star[key] = 1; save(); if (b) b.textContent = S.star[key] ? '⭐' : '☆'; toast(S.star[key] ? 'נשמרה ב"המילים שלי"' : 'הוסרה מ"המילים שלי"'); };
 function catEnd(c) {
   var k = c.w.filter(function (w) { return S.known[w.key]; }).length;
@@ -656,7 +786,7 @@ R.lesson = function (id) {
   }).join('');
   var extra = (l.extra || []).map(function (e) { var ri = reg({ tr: e[0], am: e[1], he: e[2] }); return '<div class="phrase"><button class="play small" onclick="F.p(' + ri + ',this)">🔊</button><span class="tr">' + trHTML(e[0], e[1]) + '</span><span>– ' + esc(e[2]) + '</span></div>'; }).join('');
   var qs = (l.q || []).map(function (q, k) { return '<details><summary>' + esc(q[0]) + '</summary><p style="font-size:1.15rem;font-weight:700">' + esc(q[1]) + '</p></details>'; }).join('');
-  setView(top('שיעור ' + l.num + ': ' + l.t) +
+  setView(top('שיחה ' + l.num + ': ' + l.t) +
     say(esc(l.sit), 'happy') +
     '<div class="row"><button class="btn" onclick="F.playAll()">▶ השמיעי את כל השיחה</button><button class="btn sec" onclick="F.turn()">' + (turnMode ? '👀 להציג הכול' : '🗣️ תורי לדבר') + '</button></div>' +
     (turnMode ? '<p class="muted">במצב "תורי לדבר" השורות שלך מוסתרות. קראי את התרגום, אמרי בקול, ואז לחצי.</p>' : '') +
@@ -667,11 +797,12 @@ R.lesson = function (id) {
     (wchips ? '<h3>🗂️ מילים מהשיעור</h3><div class="wchips">' + wchips + '</div>' : '') +
     (qs ? '<h3>🤔 שאלות לחשיבה</h3><p class="muted">חשבי על התשובה, ואז לחצי לראות.</p>' + qs : '') +
     '<div class="card">' + say('בסוף כל שיעור: "שמעי ובחרי". אני משמיעה משפט, ואת בוחרת מה הוא אומר.', 'listen') + '<button class="btn big" onclick="F.lessonQuiz(\'' + l.id + '\')">🎧 לתרגול הקצר</button></div>' +
+    (LPOS[l.id] ? '<button class="btn big sec" onclick="F.go(\'pl/' + LPOS[l.id].lv + '/' + LPOS[l.id].i + '\')">🗺️ חזרה לשיעור ' + (LPOS[l.id].i + 1) + ' במפה של תחנה ' + LPOS[l.id].lv + '</button>' : '') +
     lessonNav(l));
 };
 function lessonNav(l) {
   var i = LESSONS.indexOf(l), p = LESSONS[i - 1], n = LESSONS[i + 1];
-  return '<div class="navrow">' + (p ? '<button class="ibtn" onclick="F.go(\'lesson/' + p.id + '\')"><small>→ שיעור ' + p.num + '</small></button>' : '<span></span>') + (n ? '<button class="ibtn" onclick="F.go(\'lesson/' + n.id + '\')"><small>שיעור ' + n.num + ' ←</small></button>' : '') + '</div>';
+  return '<div class="navrow">' + (p ? '<button class="ibtn" onclick="F.go(\'lesson/' + p.id + '\')"><small>→ שיחה ' + p.num + '</small></button>' : '<span></span>') + (n ? '<button class="ibtn" onclick="F.go(\'lesson/' + n.id + '\')"><small>שיחה ' + n.num + ' ←</small></button>' : '') + '</div>';
 }
 F.turn = function () { turnMode = !turnMode; var l = lessonById(routeArgs[0]); l.lines.forEach(function (x) { x._shown = false; x._hint = 0; }); render(); };
 F.lineHint = function (j) { var l = lessonById(routeArgs[0]); var x = l.lines[j]; x._hint = 1; var y = window.scrollY; render(); window.scrollTo(0, y); };
@@ -798,12 +929,12 @@ F.lessonQuiz = function (id) {
   pool = uniqBy(pool, function (x) { return x.he; });
   var pickd = freshPick('lq:' + id, pool, Math.min(5, Math.max(3, pool.length)));
   var qs = pickd.map(function (x) { return makeQ(x, pool, 'listen', 3); });
-  runQuiz({ title: 'שמעי ובחרי · שיעור ' + l.num, qs: qs, back: 'lesson/' + id, again: function () { F.lessonQuiz(id); },
+  runQuiz({ title: 'שמעי ובחרי · שיחה ' + l.num, qs: qs, back: LPOS[id] ? 'pl/' + LPOS[id].lv + '/' + LPOS[id].i : 'lesson/' + id, again: function () { F.lessonQuiz(id); },
     onDone: function () {
       var first = !S.lessons[id];
       S.lessons[id] = today(); pool.forEach(function (x) { srsAdd(x.key); }); save();
       award('l:' + id);
-      return first ? '<br>סיימת את שיעור ' + l.num + '! המשפטים נכנסו לחזרה היומית.' : '';
+      return first ? '<br>סיימת את שיחה ' + l.num + '! המשפטים נכנסו לחזרה היומית.' : '';
     } });
 };
 F.catQuiz = function (id) {
@@ -864,13 +995,13 @@ R.pron = function (src) {
       '<h2>מה מתרגלים?</h2><div class="list">' +
       '<button class="li" onclick="F.go(\'read\')"><span class="e">📖</span><span class="t"><b>חוקי הקריאה</b><span class="muted">כל חוק עם מילת דוגמה</span></span></button>' +
       CATS.map(function (c) { return '<button class="li" onclick="F.go(\'pron/c:' + c.id + '\')"><span class="e">' + c.ic + '</span><span class="t"><b>' + esc(c.he) + '</b></span></button>'; }).join('') +
-      LESSONS.map(function (l) { return '<button class="li" onclick="F.go(\'pron/l:' + l.id + '\')"><span class="e">💬</span><span class="t"><b>שיעור ' + l.num + ': ' + esc(l.t) + '</b></span></button>'; }).join('') +
+      LESSONS.map(function (l) { return '<button class="li" onclick="F.go(\'pron/l:' + l.id + '\')"><span class="e">💬</span><span class="t"><b>שיחה ' + l.num + ': ' + esc(l.t) + '</b></span></button>'; }).join('') +
       '</div>');
     return;
   }
   var items = [], title = '';
   if (src.indexOf('c:') === 0) { var c = catById(src.slice(2)); title = c.he; items = c.w.filter(function (w) { return !w.o.noaudio; }); }
-  else { var l = lessonById(src.slice(2)); title = 'שיעור ' + l.num; items = l.lines.filter(function (x) { return ITEM[x.key]; }); }
+  else { var l = lessonById(src.slice(2)); title = 'שיחה ' + l.num; items = l.lines.filter(function (x) { return ITEM[x.key]; }); }
   setView(top('הגייה · ' + title) + '<div class="list">' + items.map(function (x) {
     var ri = reg(x);
     return '<div class="card"><div class="row"><span class="grow">' + trBox(x, 's') + '<div class="muted">' + esc(x.he) + '</div></span></div><div class="acts" style="justify-content:flex-start"><button class="play small" onclick="F.p(' + ri + ',this)">🔊</button><button class="play small sec" onclick="F.ps(' + ri + ',this)">🐢</button><button class="play small sec" onclick="F.rec(' + ri + ')">🎙️</button><button class="play small sec" onclick="F.listen(' + ri + ')">👂🏾</button></div></div>';
@@ -1049,7 +1180,7 @@ R.game = function (id, src, lvl) {
     if (mine >= 6) opts.push(['mine', '⭐ מכל מה שלמדתי', mine + ' פריטים']);
     LEVELS.forEach(function (lv) { opts.push(['lv:' + lv.lv, lv.ic + ' תחנה ' + lv.lv + ': ' + lv.short, '']); });
     if (g.kind !== 'l') CATS.forEach(function (c) { opts.push(['c:' + c.id, c.ic + ' ' + c.he, c.w.length + ' מילים']); });
-    LESSONS.forEach(function (l) { opts.push(['l:' + l.id, '💬 שיעור ' + l.num + ': ' + l.t, '']); });
+    LESSONS.forEach(function (l) { opts.push(['l:' + l.id, '💬 שיחה ' + l.num + ': ' + l.t, '']); });
     setView(top(g.n + (id === 'snakes' ? D.guide.name : '')) + say(esc(g.d.replace('פריאות', D.guide.name)) + '<br><b>מאיפה המילים?</b>', 'happy') +
       (id === 'memory' ? '<div class="row" style="justify-content:center"><span>גודל:</span>' + [6, 10, 16].map(function (n) { return '<button class="chip ' + ((G_SIZE === n) ? 'on' : '') + '" onclick="F.msize(' + n + ')">' + n + ' קלפים</button>'; }).join('') + '</div>' : '') +
       '<div class="list">' + opts.map(function (o) { return '<button class="li" onclick="F.go(\'game/' + id + '/' + o[0] + '\')"><span class="t"><b>' + esc(o[1]) + '</b>' + (o[2] ? '<span class="muted">' + esc(o[2]) + '</span>' : '') + '</span></button>'; }).join('') + '</div>');
@@ -1308,13 +1439,13 @@ R.read = function () {
 /* ================= טיפים ================= */
 R.tips = function () {
   var all = D.tips.slice();
-  LESSONS.forEach(function (l) { if (l.tip) all.push({ T: l.tipT || 'מקצועי', t: 'שיעור ' + l.num + ': ' + l.t, d: l.tip, L: l.id }); });
+  LESSONS.forEach(function (l) { if (l.tip) all.push({ T: l.tipT || 'מקצועי', t: 'שיחה ' + l.num + ': ' + l.t, d: l.tip, L: l.id }); });
   var groups = [['תרבותי', '🌍 טיפים תרבותיים'], ['מקצועי', '🧑🏾‍🏫 טיפים מקצועיים'], ['לימוד', '📚 איך לומדים הכי טוב']];
-  setView(top('טיפים מ' + D.guide.name) + say('כל הטיפים מהשיעורים במקום אחד. לחיצה על "לשיעור" תיקח אותך לשיחה שבה הטיפ מופיע.', 'happy') +
+  setView(top('טיפים מ' + D.guide.name) + say('כל הטיפים מהשיחות במקום אחד. לחיצה על "לשיחה" תיקח אותך לשיחה שבה הטיפ מופיע.', 'happy') +
     groups.map(function (g) {
       return '<h2>' + g[1] + '</h2>' + all.filter(function (t) { return t.T === g[0]; }).map(function (t) {
         var l = t.L && lessonById(t.L);
-        return '<div class="box tip"><h3>' + esc(t.t) + '</h3><p>' + esc(t.d) + '</p>' + (l ? '<button class="chip" onclick="F.go(\'lesson/' + l.id + '\')">לשיעור ' + l.num + ' ←</button>' : '') + '</div>';
+        return '<div class="box tip"><h3>' + esc(t.t) + '</h3><p>' + esc(t.d) + '</p>' + (l ? '<button class="chip" onclick="F.go(\'lesson/' + l.id + '\')">לשיחה ' + l.num + ' ←</button>' : '') + '</div>';
       }).join('');
     }).join('') + '<p></p><button class="btn big sec" onclick="F.go(\'steps\')">🧭 לשיחה טיפולית צעד אחר צעד</button>');
 };
@@ -1373,7 +1504,7 @@ R.album = function () {
   setView(top('אלבום המדבקות') + say('אספת <b>' + n + '</b> מדבקות מתוך ' + defs.length + '. מדבקה שעוד לא הושגה מופיעה כצללית, עם רמז איך משיגים אותה.', 'cheer') +
     sec('🏆 תחנות ורצפים', function (d) { return /^(st|s\d|snake|mem|rev|rec|ear)/.test(d.id); }) +
     sec('🗂️ קטגוריות מילים', function (d) { return d.id.indexOf('c:') === 0; }) +
-    sec('💬 שיעורים', function (d) { return d.id.indexOf('l:') === 0; }));
+    sec('💬 שיחות', function (d) { return d.id.indexOf('l:') === 0; }));
 };
 
 /* ================= הדפסה ================= */

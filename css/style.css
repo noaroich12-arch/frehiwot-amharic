@@ -239,3 +239,24 @@ table.gt th{background:var(--accentSoft)}
 .sayas{font-size:1.15rem;margin:6px 0}
 .sayas b{font-size:1.35rem}
 .starline{background:#fff4d6;border-radius:10px;padding:4px 10px;margin:4px 0;font-size:.92rem;color:#3b2f22}
+
+/* המפה: דרך של עיגולים בזיגזג */
+.trail{position:relative;margin:8px 0 18px}
+.trail svg{position:absolute;inset:0;width:100%;height:100%}
+.trail svg path{fill:none;stroke:#d9b98f;stroke-width:6;stroke-dasharray:2 12;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.trail .node{position:absolute;transform:translateX(-50%);background:none;border:none;padding:0;display:flex;flex-direction:column;align-items:center;gap:6px;width:170px;text-align:center}
+.trail .dot{position:relative;width:76px;height:76px;border-radius:50%;background:var(--card);border:4px solid var(--line);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center}
+.trail .dot .ic{font-size:2rem;line-height:1}
+.trail .dot .nm{position:absolute;bottom:-6px;right:-6px;min-width:30px;height:30px;border-radius:15px;background:var(--ink);color:#fff;font-weight:800;font-size:.95rem;display:flex;align-items:center;justify-content:center;padding:0 6px}
+.trail .lab{display:flex;flex-direction:column;background:var(--bg);border-radius:10px;padding:0 6px;line-height:1.3}
+.trail .lab b{font-size:1rem;color:var(--ink)}
+.trail .lab span{font-size:.9rem;color:var(--ink2)}
+.trail .lab em{font-style:normal;font-weight:800;color:var(--orange);font-size:.95rem}
+.trail .node.done .dot{background:var(--greenSoft);border-color:var(--green)}
+.trail .node.next .dot{background:var(--accentSoft);border-color:var(--accent);transform:scale(1.12);box-shadow:0 0 0 6px rgba(200,96,31,.18)}
+.trail.big .node{width:220px}
+.trail.big .dot{width:96px;height:96px}
+.trail.big .dot .ic{font-size:2.6rem}
+.trail.big .lab b{font-size:1.1rem}
+details.more{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 16px;margin:12px 0}
+details.more summary{font-weight:800;font-size:1.1rem;cursor:pointer}
