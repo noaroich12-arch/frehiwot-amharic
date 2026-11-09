@@ -287,6 +287,17 @@ function firstLetter(tr) {
 }
 /* בלי סימן שאלה, קריאה או נקודה בסוף, ובלי צורה כפולה "בן / בת" – כדי שאף תשובה לא תבלוט */
 function noPunct(s) { return String(s || '').split(' / ')[0].replace(/[?!፧]/g, '').replace(/[\s.,;:׃።፨"״]+$/g, '').replace(/^[¿¡"״]+/, '').trim(); }
+/* הקשר למשפט מתוך שיחה: השיעור, המצב, ומה נאמר רגע לפני. משפט כמו "כן" או "פסטה" לבד – לא מובן. */
+function lineCtx(x) {
+  if (!x || x.kind !== 'l' || !x.lesson) return '';
+  var l = lessonById(x.lesson); if (!l) return '';
+  var nm = function (s) { return s === 'a' ? 'את' : s; };
+  var prev = '';
+  for (var t = x.j - 1; t >= 0; t--) { var y = l.lines[t]; if (y && FCore.normKey(y.am)) { prev = '<div class="ctxline"><b>' + esc(nm(y.spk)) + ':</b> ' + esc(y.he) + '</div>'; break; } }
+  return '<div class="ctxbox"><div><b>📍 שיעור ' + l.num + ': ' + esc(l.t) + '</b></div><div>' + esc(l.sit) + '</div>' +
+    (prev ? '<div class="muted" style="margin-top:6px">רגע לפני:</div>' + prev : '') +
+    '<div style="margin-top:6px"><b>עכשיו ' + (x.spk === 'a' ? 'את אומרת' : esc(x.spk) + ' אומר/ת') + ':</b></div></div>';
+}
 function hintBtn(fn, label) {
   return '<div class="hintwrap"><button class="hintbtn" id="hintBtn" onclick="' + fn + '">' + fr('think') +
     '<span>' + (label || 'נתקעת? לחצי עליי ואתן לך רמז') + '</span></button><div id="hintBox"></div></div>';
@@ -700,6 +711,7 @@ function runQuiz(cfg) {
 function drawQ() {
   var z = QZ, q = z.cfg.qs[z.i], x = q.item, ri = reg(x);
   var head = '<div class="qhead"><span>' + esc(z.cfg.title) + '</span><span>' + (z.i + 1) + ' / ' + z.cfg.qs.length + '</span></div>';
+  head += lineCtx(x);
   var prompt = '';
   if (q.type === 'listen') prompt = '<div class="qprompt">🔊 מה שמעת?</div><div class="acts"><button class="play" onclick="F.p(' + ri + ',this)">🔊</button><button class="play sec" onclick="F.ps(' + ri + ',this)">🐢</button></div>';
   if (q.type === 'how') prompt = '<div class="qprompt">איך אומרים: "' + esc(x.he) + '"?</div>' + (x.pic && x.kind === 'w' ? '<div class="pic">' + picHTML(x.pic) + '</div>' : '');
